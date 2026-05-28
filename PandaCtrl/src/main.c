@@ -96,8 +96,8 @@ int main(int argc, char *argv[]) {
     int r;
     r = libusb_init(&context);
     if (r < 0) {
-    fprintf(stderr, "libusb_init failed: %s\n", libusb_error_name(r));
-    return -1;
+        fprintf(stderr, "libusb_init failed: %s\n", libusb_error_name(r));
+        return -1;
     }
     // 打开设备
     dev_handle = libusb_open_device_with_vid_pid(context, 0x04b4, 0x00c3);
@@ -113,13 +113,13 @@ int main(int argc, char *argv[]) {
     if (libusb_kernel_driver_active(dev_handle, 1) == 1) {
         printf("Kernel driver active, detaching...\n");
         r = libusb_detach_kernel_driver(dev_handle, 1);
-        if (r < 0) {
-        fprintf(stderr, "Failed to detach kernel driver: %s\n", libusb_error_name(r));
-        libusb_close(dev_handle);
-        libusb_exit(context);
-        return -1;
+            if (r < 0) {
+            fprintf(stderr, "Failed to detach kernel driver: %s\n", libusb_error_name(r));
+            libusb_close(dev_handle);
+            libusb_exit(context);
+            return -1;
+        }
     }
-}
     // 确保没有内核驱动占用
     if (libusb_kernel_driver_active(dev_handle, 0) == 1) {
         libusb_detach_kernel_driver(dev_handle, 0);
@@ -128,28 +128,29 @@ int main(int argc, char *argv[]) {
     usleep(100000);  // 延时100毫秒
     r = libusb_set_configuration(dev_handle, 1);
     if (r < 0) {
-    fprintf(stderr, "Unable to set configuration: %s\n", libusb_error_name(r));
-    return;
+        fprintf(stderr, "Unable to set configuration: %s\n", libusb_error_name(r));
+        return -1;
     }
     struct libusb_config_descriptor *config_desc;
-    r = libusb_get_config_descriptor(dev_handle, 0, &config_desc);
+    libusb_device *dev = libusb_get_device(dev_handle);
+    r = libusb_get_config_descriptor(dev, 0, &config_desc);
     if (r == 0) {
     // 确保配置索引正确
     } else {
        // printf("Error getting config descriptor: %s\n", libusb_error_name(r));
     }
-    r = libusb_claim_interface(dev_handle, 1);
-    if (r < 0) {
-        fprintf(stderr, "Unable to claim interface: %s\n", libusb_error_name(r));
-        return -2;
-    }
+    // r = libusb_claim_interface(dev_handle, 1);
+    // if (r < 0) {
+    //     fprintf(stderr, "Unable to claim interface: %s\n", libusb_error_name(r));
+    //     return -2;
+    // }
     // 声明并选择接口
     printf("Device opened successfully\n");
-    uint16_t readVal = 0;
+    // uint16_t readVal = 0;
 
     sleep(1);
-//Reg16BitByteWrite(0x90, 0x0320, 0x2C);
-//----------
+    //Reg16BitByteWrite(0x90, 0x0320, 0x2C);
+    //----------
 
 IIC_addr = 0x90;
     // 打开配置文件
@@ -173,13 +174,13 @@ sleep(1);
 // printf("get 2 info readVal = %d" ,readVal);
     // 关闭设备
     
-libusb_release_interface(dev_handle, 1);
-usleep(100000);  // 延迟100毫秒
-if (libusb_claim_interface(dev_handle, 1) < 0) {
-    fprintf(stderr, "Unable to claim interface\n");
-    libusb_attach_kernel_driver(dev_handle, 0);
-    return -3;
-}
+// libusb_release_interface(dev_handle, 1);
+// usleep(100000);  // 延迟100毫秒
+// if (libusb_claim_interface(dev_handle, 1) < 0) {
+//     fprintf(stderr, "Unable to claim interface\n");
+//     libusb_attach_kernel_driver(dev_handle, 0);
+//     return -3;
+// }
 libusb_attach_kernel_driver(dev_handle, 0);
  libusb_reset_device(dev_handle);
 usleep(100000);  // 延迟100毫秒
@@ -228,12 +229,14 @@ int Reg16BitByteWrite(uint8_t devAddr, uint16_t regAddr, uint8_t regValue)
     data[5] = 0;                        // order
     data[6] = regValue;                 // WRITE value
    
-   cx3_send_extension_request(dev_handle, data, sizeof(data),NEEDREAD);      
-        if (data[10] == 0) {
-        }
-        else {
-            printf("  faild write i2c=0x%x regaddr = 0x%x  val = 0x%x\n",devAddr,regAddr,regValue);
-        }   
+   cx3_send_extension_request(dev_handle, data, sizeof(data),NEEDREAD);
+   
+    if (data[10] == 0) {
+        printf("  i2c=0x%02x regaddr = 0x%04x  val = 0x%02x\n", devAddr, regAddr, regValue);
+    }
+    else {
+        printf("  faild write i2c=0x%02x regaddr = 0x%04x  val = 0x%02x\n", devAddr, regAddr, regValue);
+    }   
     return 0;
 }
 
@@ -454,10 +457,10 @@ void parse_line(char *strLine, unsigned char *currentI2CAddr) {
                 strncpy(mode, indexStart, indexEnd - indexStart);
                 mode[indexEnd - indexStart] = '\0';  // 确保字符串结束
                 // 删除字符串中的回车符和换行符
-            for (int i = 0; i < strlen(mode); i++) {
-                if (mode[i] == '\r' || mode[i] == '\n') {
-                   mode[i] = '\0';  // 用空字符替换
-                  }
+                for (size_t i = 0; i < strlen(mode); i++) {
+                    if (mode[i] == '\r' || mode[i] == '\n') {
+                        mode[i] = '\0';  // 用空字符替换
+                    }
                 }
                 trim(mode);
                  if (strcmp(mode, "8BITREG_BYTEWRITE") == 0) {
@@ -532,6 +535,7 @@ void parse_line(char *strLine, unsigned char *currentI2CAddr) {
             int delay;
             if (sscanf(indexStart, "%d", &delay) == 1) {
                // printf("Parsed DELAY: %d ms\n", delay);
+               usleep(1000*delay);
             }
         }
     }
